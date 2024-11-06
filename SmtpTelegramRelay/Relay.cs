@@ -5,8 +5,17 @@ using SmtpServer.Tracing;
 
 namespace SmtpTelegramRelay;
 
-internal sealed class Relay(ILogger<Relay> logger, IOptionsMonitor<RelayConfiguration> options) : BackgroundService
+internal sealed class Relay : BackgroundService
 {
+    private readonly ILogger<Relay> _logger;
+    private readonly IOptionsMonitor<RelayConfiguration> _options;
+
+    public Relay(ILogger<Relay> logger, IOptionsMonitor<RelayConfiguration> options)
+    {
+        _logger = logger;
+        _options = options;
+    }
+
     private SmtpServer.SmtpServer? _server;
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
@@ -14,11 +23,11 @@ internal sealed class Relay(ILogger<Relay> logger, IOptionsMonitor<RelayConfigur
         try
         {
             var serverOptions = new SmtpServerOptionsBuilder()
-                .Port(options.CurrentValue.SmtpPort)
+                .Port(_options.CurrentValue.SmtpPort)
                 .Build();
 
             var telegramStore = new SmtpServer.ComponentModel.ServiceProvider();
-            telegramStore.Add(new Store(options));
+            telegramStore.Add(new Store(_options));
 
             _server = new SmtpServer.SmtpServer(serverOptions, telegramStore);
             _server.SessionCreated += OnSessionCreated;
@@ -37,7 +46,7 @@ internal sealed class Relay(ILogger<Relay> logger, IOptionsMonitor<RelayConfigur
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "{Message}", ex.Message);
+            _logger.LogError(ex, "{Message}", ex.Message);
 
             // Terminates this process and returns an exit code to the operating system.
             // This is required to avoid the 'BackgroundServiceExceptionBehavior', which
@@ -66,7 +75,7 @@ internal sealed class Relay(ILogger<Relay> logger, IOptionsMonitor<RelayConfigur
 
     void OnSessionCreated(object? sender, SessionEventArgs e)
     {
-        logger.LogDebug("{Session} session created",
+        _logger.LogDebug("{Session} session created",
             e.Context.Properties[EndpointListener.RemoteEndPointKey]);
 
         e.Context.CommandExecuting += OnCommandExecuting;
@@ -74,7 +83,7 @@ internal sealed class Relay(ILogger<Relay> logger, IOptionsMonitor<RelayConfigur
 
     void OnSessionCompleted(object? sender, SessionEventArgs e)
     {
-        logger.LogDebug("{Session} session completed",
+        _logger.LogDebug("{Session} session completed",
             e.Context.Properties[EndpointListener.RemoteEndPointKey]);
 
         e.Context.CommandExecuting -= OnCommandExecuting;
@@ -82,7 +91,7 @@ internal sealed class Relay(ILogger<Relay> logger, IOptionsMonitor<RelayConfigur
 
     void OnSessionFaulted(object? sender, SessionFaultedEventArgs e)
     {
-        logger.LogDebug(e.Exception, "{Session} session faulted",
+        _logger.LogDebug(e.Exception, "{Session} session faulted",
             e.Context.Properties[EndpointListener.RemoteEndPointKey]);
 
         e.Context.CommandExecuting -= OnCommandExecuting;
@@ -90,7 +99,7 @@ internal sealed class Relay(ILogger<Relay> logger, IOptionsMonitor<RelayConfigur
 
     void OnSessionCancelled(object? sender, SessionEventArgs e)
     {
-        logger.LogDebug("{Session} session cancelled",
+        _logger.LogDebug("{Session} session cancelled",
             e.Context.Properties[EndpointListener.RemoteEndPointKey]);
 
         e.Context.CommandExecuting -= OnCommandExecuting;
@@ -100,7 +109,7 @@ internal sealed class Relay(ILogger<Relay> logger, IOptionsMonitor<RelayConfigur
     {
         var writer = new StringWriter();
         new TracingSmtpCommandVisitor(writer).Visit(e.Command);
-        logger.LogDebug("{Session} command {Command}",
+        _logger.LogDebug("{Session} command {Command}",
             e.Context.Properties[EndpointListener.RemoteEndPointKey],
             writer.ToString());
     }
