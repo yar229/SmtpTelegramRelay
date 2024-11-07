@@ -1,7 +1,5 @@
 ﻿using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.Extensions.Logging.Configuration;
-using Microsoft.Extensions.Logging.EventLog;
 using SmtpTelegramRelay.Configuration;
 using SmtpTelegramRelay.Services;
 using System.Runtime.InteropServices;
@@ -30,10 +28,7 @@ public class Startup
             .AddHostedService(provider => provider.GetService<Relay>()!);
 
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-        {
             services.AddWindowsService(options => options.ServiceName = "SMTP Telegram Relay");
-            LoggerProviderOptions.RegisterProviderOptions<EventLogSettings, EventLogLoggerProvider>(services);
-        }
         else
             services.AddSystemd();
     }

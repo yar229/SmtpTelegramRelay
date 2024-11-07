@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore;
 using Microsoft.AspNetCore.Hosting;
+using NLog.Web;
 
 namespace SmtpTelegramRelay;
 
@@ -13,9 +14,12 @@ public static class Program
             .AddYamlFile("appsettings.yaml", optional: true)
             .Build();
 
-        IWebHost webHost = WebHost
-            .CreateDefaultBuilder()
+        var builder = WebHost
+            .CreateDefaultBuilder();
+
+        IWebHost webHost = builder
             .UseConfiguration(config)
+            .UseNLog()
             .UseStartup<Startup>()
             .UseUrls($"http://{config.GetValue<string>("HttpAddress")}:{config.GetValue<int>("HttpPort")}/")
             .Build();
