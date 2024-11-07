@@ -11,7 +11,7 @@ public sealed class SmtpServerBuilder
     private readonly ILogger<SmtpServerBuilder> _logger;
     private readonly SmtpServer.SmtpServer? _server;
 
-    public SmtpServerBuilder(Store store, IOptionsMonitor<RelayConfiguration> options, ILogger<SmtpServerBuilder> logger)
+    public SmtpServerBuilder(TelegramStore store, IOptionsMonitor<RelayConfiguration> options, ILogger<SmtpServerBuilder> logger)
     {
         _logger = logger;
 

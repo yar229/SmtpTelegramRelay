@@ -5,9 +5,9 @@ namespace SmtpTelegramRelay.Controllers;
 
 public class TelegramController : Controller
 {
-    private readonly Store _store;
+    private readonly TelegramStore _store;
 
-    public TelegramController(Store store)
+    public TelegramController(TelegramStore store)
     {
         _store = store;
     }

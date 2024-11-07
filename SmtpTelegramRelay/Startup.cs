@@ -22,7 +22,7 @@ public class Startup
             .AddControllers();
 
         services
-            .AddSingleton<Store>()
+            .AddSingleton<TelegramStore>()
             .AddSingleton<SmtpServerBuilder>()
             .AddSingleton<Relay>()
             .AddHostedService(provider => provider.GetService<Relay>()!);
