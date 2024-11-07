@@ -1,8 +1,13 @@
-﻿namespace SmtpTelegramRelay;
+﻿namespace SmtpTelegramRelay.Configuration;
 
-internal sealed class RelayConfiguration
+public sealed class RelayConfiguration
 {
+    public string HttpIp { get; set; } = default!;
+    public ushort HttpPort { get; set; } = 80;
+
+    public string SmtpIp { get; set; } = default!;
     public ushort SmtpPort { get; set; } = 25;
+
     public string TelegramBotToken { get; set; } = default!;
     public List<Route> Routing { get; set; } = new();
 

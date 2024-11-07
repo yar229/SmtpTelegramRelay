@@ -1,34 +1,25 @@
-﻿using Microsoft.Extensions.Logging.Configuration;
-using Microsoft.Extensions.Logging.EventLog;
-using System.Runtime.InteropServices;
+﻿using Microsoft.AspNetCore;
+using Microsoft.AspNetCore.Hosting;
 
 namespace SmtpTelegramRelay;
 
 public static class Program
 {
-    private static void Main(string[] args)
+    private static void Main()
     {
-        var builder = Host.CreateApplicationBuilder(args);
-        
-        builder.Configuration
+        var config = new ConfigurationBuilder()
+            .SetBasePath(Directory.GetCurrentDirectory())
             .SetBasePath(AppContext.BaseDirectory)
             .AddYamlFile("appsettings.yaml", optional: true)
-            .AddYamlFile($"appsettings.{builder.Environment.EnvironmentName}.yaml", optional: true);
-        builder.Services
-            .AddHostedService<Relay>()
-            .Configure<RelayConfiguration>(builder.Configuration);
+            .Build();
 
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-        {
-            builder.Services.AddWindowsService(options => options.ServiceName = "SMTP Telegram Relay");
-            LoggerProviderOptions.RegisterProviderOptions<EventLogSettings, EventLogLoggerProvider>(builder.Services);
-        }
-        else
-        {
-            builder.Services.AddSystemd();
-        }
+        IWebHost webHost = WebHost
+            .CreateDefaultBuilder()
+            .UseConfiguration(config)
+            .UseStartup<Startup>()
+            .UseUrls($"http://{config.GetValue<string>("HttpAddress")}:{config.GetValue<int>("HttpPort")}/")
+            .Build();
 
-        var host = builder.Build();
-        host.Run();
+        webHost.Run();
     }
 }

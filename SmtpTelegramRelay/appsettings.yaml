@@ -1,6 +1,6 @@
-﻿# The port that the relay will listen on to receive SMTP e-mail messages, the default is 25. 
-# No authorization is required when connecting to this port, 
-# but if necessary, select the basic authentication method with a fake username and password
+﻿HttpAddress: "*"
+HttpPort: 5026
+SmtpAddress: "*"
 SmtpPort: 5025
 # Your token for the Telegram bot, get it at https://t.me/BotFather when registering the bot
 TelegramBotToken: TELEGRAM_BOT_TOKEN
@@ -18,7 +18,7 @@ Routing:
     TelegramChatId: TELEGRAM_CHAT_ID
     Prefixes:
     -   RegexpSubject: "supply\\s+normal"
-        Prefix: "🟢  "
+        Prefix: "🟢 "
     -   RegexpSubject: "supply\\s+fault"
         Prefix: "🔴 "
 -   EmailTo: "*"
