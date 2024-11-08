@@ -3,12 +3,12 @@
 public sealed class Relay : BackgroundService
 {
     private readonly ILogger<Relay> _logger;
-    private readonly SmtpServer.SmtpServer? _server;
+    private readonly SmtpServer.SmtpServer _server;
 
     public Relay(ILogger<Relay> logger, SmtpServerBuilder smtpServerBuilder)
     {
         _logger = logger;
-        _server = smtpServerBuilder.SmtpServer;
+        _server = smtpServerBuilder.SmtpServer ?? throw new ArgumentNullException(nameof(smtpServerBuilder.SmtpServer));
     }
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)

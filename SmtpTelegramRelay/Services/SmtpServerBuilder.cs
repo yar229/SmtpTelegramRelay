@@ -9,7 +9,7 @@ namespace SmtpTelegramRelay.Services;
 public sealed class SmtpServerBuilder
 {
     private readonly ILogger<SmtpServerBuilder> _logger;
-    private readonly SmtpServer.SmtpServer? _server;
+    private readonly SmtpServer.SmtpServer _server;
 
     public SmtpServerBuilder(TelegramStore store, IOptionsMonitor<RelayConfiguration> options, ILogger<SmtpServerBuilder> logger)
     {
