@@ -72,8 +72,13 @@ public sealed class TelegramStore : MessageStore
             }
 
             if (medias.Count > 0)
-                await _bot!.SendMediaGroup(chat.TelegramChatId, medias, disableNotification:true, cancellationToken: cancellationToken)    //TODO: upload files once, then send by ids
+            {
+                await _bot!.SendChatAction(chat.TelegramChatId, ChatAction.UploadDocument,
+                    cancellationToken: cancellationToken);
+                await _bot!.SendMediaGroup(chat.TelegramChatId, medias, disableNotification: true,
+                        cancellationToken: cancellationToken) //TODO: upload files once, then send by ids
                     .ConfigureAwait(false);
+            }
         }
 
         return SmtpResponse.Ok;
