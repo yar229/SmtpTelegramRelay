@@ -19,7 +19,7 @@ public sealed class RouteItem
     public string EmailTo { get; set; } = default!;
     public string EmailFrom { get; set; } = default!;
 
-    public int TelegramChatId { get; set; }
+    public long TelegramChatId { get; set; }
 
     public Collection<PrefixItem> Prefixes { get; } = new();
 }

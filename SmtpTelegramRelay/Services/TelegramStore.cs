@@ -33,13 +33,12 @@ public sealed class TelegramStore : MessageStore
     }
 
     public async Task<SmtpResponse> SaveAsync(string? subject, string? message, IEnumerable<KeyValuePair<string, Stream>> files, IEnumerable<string> from, IEnumerable<string> to,
-        ParseMode parseMode,
-        CancellationToken cancellationToken)
+        ParseMode parseMode, CancellationToken cancellationToken)
     {
         PrepareBot(_options.CurrentValue, cancellationToken);
 
         var medias = files
-            .Select(f => new InputMediaDocument(new InputFileStream(f.Value, f.Key)))
+            .Select(f => new InputMediaPhoto(new InputFileStream(f.Value, f.Key)))
             .ToList();
 
         var froms = string.Join(",", from).Trim();
@@ -63,9 +62,15 @@ public sealed class TelegramStore : MessageStore
                     sb.Append(prefix.Prefix);
             sb.Append(text);
 
-            for (int i = 0 ; i <= sb.Length / 4096; i++)
-                await _bot!.SendMessage(chat.TelegramChatId, sb.ToString(i * 4096, Math.Min(sb.Length - i * 4096, 4096)), parseMode: parseMode, linkPreviewOptions: new LinkPreviewOptions { IsDisabled = true }, cancellationToken: cancellationToken)
-                    .ConfigureAwait(false);
+            for (int i = 0; i <= sb.Length / 4096; i++)
+            {
+                var part = sb.ToString(i * 4096, Math.Min(sb.Length - i * 4096, 4096));
+                if (part.Length > 0)
+                    await _bot!.SendMessage(chat.TelegramChatId, part, parseMode: parseMode, linkPreviewOptions: new LinkPreviewOptions { IsDisabled = true },
+                            cancellationToken: cancellationToken)
+                        .ConfigureAwait(false);
+            }
+
             if (medias.Count > 0)
                 await _bot!.SendMediaGroup(chat.TelegramChatId, medias, disableNotification:true, cancellationToken: cancellationToken)    //TODO: upload files once, then send by ids
                     .ConfigureAwait(false);
@@ -74,10 +79,10 @@ public sealed class TelegramStore : MessageStore
         return SmtpResponse.Ok;
     }
 
-    public Task<SmtpResponse> SaveAsync(string? subject, string? message, string? from, string? to, CancellationToken cancellationToken)
+    public Task<SmtpResponse> SaveAsync(string? subject, string? message, string? from, string? to, 
+        ParseMode parseMode, CancellationToken cancellationToken)
         => SaveAsync(subject, message, Enumerable.Empty<KeyValuePair<string, Stream>>(), (from ?? string.Empty).Enumerate(), (to ?? string.Empty).Enumerate(),
-            ParseMode.None,
-            cancellationToken);
+            parseMode, cancellationToken);
 
 
     public override async Task<SmtpResponse> SaveAsync(

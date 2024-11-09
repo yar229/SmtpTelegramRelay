@@ -9,21 +9,31 @@ TelegramBotToken: TELEGRAM_BOT_TOKEN
 Routing:
 -   EmailTo: "*"
     EmailFrom: backup@mrhyde.loc
-    TelegramChatId: TELEGRAM_CHAT_ID
+    TelegramChatId: CHAT_ID_ONE_TO_ONE_OR_GROUP
     Prefixes:
     -   RegexpSubject: "\\ASuccess"
         Prefix: "🟢 "
 -   EmailTo: "*"
     EmailFrom: upsmart@mrhyde.loc
-    TelegramChatId: TELEGRAM_CHAT_ID
+    TelegramChatId: CHAT_ID_ONE_TO_ONE_OR_GROUP
     Prefixes:
     -   RegexpSubject: "supply\\s+normal"
-        Prefix: "🟢 "
+        Prefix: "🟢⚡️ "
     -   RegexpSubject: "supply\\s+fault"
-        Prefix: "🔴 "
+        Prefix: "🔴⚡️ "
+    -   RegexpSubject: "UPS\\s+connected"
+        Prefix: "🟢⚡️ "
+    -   RegexpSubject: "UPS\\s+Report"
+        Prefix: "📋⚡️ "
+-   EmailTo: "*"
+    EmailFrom: randomphoto@mrhyde.loc
+    TelegramChatId: ANOTHER_CHAT_ID_ONE_TO_ONE_OR_GROUP
+    Prefixes:
+    -   RegexpSubject: "\\.*"
+        Prefix: "🎲 "
 -   EmailTo: "*"
     EmailFrom: "*"
-    TelegramChatId: 12769849
+    TelegramChatId: CHAT_ID_ONE_TO_ONE_OR_GROUP
 # Logging Level. Set to Debug to see the details of the communication between your mail program and the relay.
 # Set to Error to see less information
 Logging:
