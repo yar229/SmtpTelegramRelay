@@ -1,8 +1,17 @@
 ﻿
+using System.Text;
+
 namespace SmtpTelegramRelay.Extensions
 {
     internal static class CommonExtensions
     {
+        public static StringBuilder AppendNotEmpty(this StringBuilder sb, string? data, Func<string, string> func)
+        {
+            if (!string.IsNullOrEmpty(data))
+                sb.Append(func(data));
+            return sb;
+        }
+
         public static T? IsNotNullOrEmpty<T>(this string? data, Func<string, T?> func) where T : class
             => string.IsNullOrEmpty(data)
                 ? null 

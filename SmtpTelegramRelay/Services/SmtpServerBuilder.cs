@@ -3,6 +3,7 @@ using SmtpServer;
 using SmtpServer.Net;
 using SmtpServer.Tracing;
 using SmtpTelegramRelay.Configuration;
+using SmtpTelegramRelay.Services.TelegramStores;
 
 namespace SmtpTelegramRelay.Services;
 

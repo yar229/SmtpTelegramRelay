@@ -10,9 +10,10 @@ using Microsoft.Extensions.Options;
 using Telegram.Bot.Types;
 using SmtpTelegramRelay.Configuration;
 using SmtpTelegramRelay.Extensions;
+using SmtpTelegramRelay.Services.TelegramStores.Models;
 using Telegram.Bot.Types.Enums;
 
-namespace SmtpTelegramRelay.Services;
+namespace SmtpTelegramRelay.Services.TelegramStores;
 
 public sealed class TelegramStore : MessageStore
 {
@@ -34,68 +35,47 @@ public sealed class TelegramStore : MessageStore
         _regexes = CompileRegexes(options);
     }
 
-    public async Task<SmtpResponse> SaveAsync(IEnumerable<string?> from, IEnumerable<string?> to,
-        string? subject, string? body, 
-        IEnumerable<(string Name, Stream Stream)> files,
-        ParseMode parseMode, CancellationToken cancellationToken)
+    public async Task<SmtpResponse> SaveAsync(TelegramMessage message, CancellationToken cancellationToken)
     {
         PrepareBot(_options.CurrentValue, cancellationToken);
 
-        var froms = from.Cast<string>().ToList();
-        var tos = to.Cast<string>().ToList();
-        var medias = files
+        var medias = message.Files
             .Select(f => new InputMediaPhoto(new InputFileStream(f.Stream, f.Name)))
             .ToList();
-
-        var strFrom = string.Join(",", froms).Trim();
-        var strTo = string.Join(",", tos).Trim();
-        var text = new StringBuilder();
-        if (!string.IsNullOrEmpty(subject))
-            text.Append($"{subject}\r\n");
-        if (!string.IsNullOrEmpty(strFrom))
-            text.Append($"From: {strFrom}\r\n");
-        if (!string.IsNullOrEmpty(strTo))
-            text.Append($"To: {strTo}\r\n");
-        if (!string.IsNullOrEmpty(body))
-            text.Append(body);
+        var text = new StringBuilder()
+            .AppendNotEmpty(message.Subject, str => $"{str}\r\n")
+            .AppendNotEmpty(string.Join(",", message.From).Trim(), str => $"From: {str}\r\n")
+            .AppendNotEmpty(string.Join(",", message.To).Trim(), str => $"To: {str}\r\n")
+            .Append(message.Body);
 
         Regex? GetRegex(string? rx) => rx.IsNotNullOrEmpty(r => _regexes.TryGetValue(r, out var regex) ? regex : null);
         bool IsMatch(string? str, string rgx) => str.IsNotNullOrEmpty(_ => GetRegex(rgx)) is { } irgx && irgx.IsMatch(str!);
-        foreach (var chat in GetChats(froms, tos))
+        foreach (var chat in GetChats(message.From, message.To))
         {
             var sb = new StringBuilder();
             foreach (var prefix in chat.Prefixes)
-                if (IsMatch(subject, prefix.RegexpSubject) || IsMatch(body, prefix.RegexpBody))
+                if (IsMatch(message.Subject, prefix.RegexpSubject) || IsMatch(message.Body, prefix.RegexpBody))
                     sb.Append(prefix.Prefix);
             sb.Append(text);
 
-            for (int i = 0; i <= sb.Length / 4096; i++)
-            {
-                var part = sb.ToString(i * 4096, Math.Min(sb.Length - i * 4096, 4096));
-                if (part.Length > 0)
-                    await _bot!.SendMessage(chat.TelegramChatId, part, parseMode: parseMode, linkPreviewOptions: new LinkPreviewOptions { IsDisabled = true },
-                            cancellationToken: cancellationToken)
-                        .ConfigureAwait(false);
-            }
 
-            if (medias.Count > 0)
-            {
-                await _bot!.SendChatAction(chat.TelegramChatId, ChatAction.UploadDocument,
-                    cancellationToken: cancellationToken);
-                await _bot!.SendMediaGroup(chat.TelegramChatId, medias, disableNotification: true,
-                        cancellationToken: cancellationToken) //TODO: upload files once, then send by ids
+            foreach (var part in sb.ToString().Chunk(4096))
+                await _bot!.SendMessage(chat.TelegramChatId,  new string(part), parseMode: message.ParseMode, linkPreviewOptions: new LinkPreviewOptions { IsDisabled = true },
+                        cancellationToken: cancellationToken)
                     .ConfigureAwait(false);
-            }
+
+            if (medias.Count <= 0) 
+                continue;
+
+            await _bot!.SendChatAction(chat.TelegramChatId, ChatAction.UploadDocument,
+                cancellationToken: cancellationToken);
+            await _bot!.SendMediaGroup(chat.TelegramChatId, medias, disableNotification: true,
+                    cancellationToken: cancellationToken) //TODO: upload files once, then send by ids
+                .ConfigureAwait(false);
         }
 
         return SmtpResponse.Ok;
     }
-
-    public Task<SmtpResponse> SaveAsync(string? from, string? to, string? subject, string? body, 
-        ParseMode parseMode, CancellationToken cancellationToken)
-        => SaveAsync((from ?? string.Empty).Enumerate(), (to ?? string.Empty).Enumerate(), subject, body, Enumerable.Empty<(string, Stream)>(), 
-            parseMode, cancellationToken);
-
 
     public override async Task<SmtpResponse> SaveAsync(
         ISessionContext context,
@@ -148,7 +128,15 @@ public sealed class TelegramStore : MessageStore
             parseMode = ParseMode.Html;
         }
 
-        return await SaveAsync(xemailsFrom, xemailsTo, message.Subject, text, files, parseMode, cancellationToken)
+        return await SaveAsync(new TelegramMessage
+            {
+                From = xemailsFrom, 
+                To = xemailsTo, 
+                Subject = message.Subject, 
+                Body = text, 
+                Files = files, 
+                ParseMode = parseMode
+            }, cancellationToken)
             .ConfigureAwait(false);
     }
 
@@ -160,14 +148,14 @@ public sealed class TelegramStore : MessageStore
             _bot = null;
         }
 
-        if (_bot != null) 
+        if (_bot != null)
             return;
 
         _bot = new TelegramBotClient(currentOptions.TelegramBotToken);
         _token = currentOptions.TelegramBotToken;
     }
 
-    private List<RouteItem> GetChats(List<string?> emailsFrom, List<string?> emailsTo)
+    private List<RouteItem> GetChats(IEnumerable<string?> emailsFrom, IEnumerable<string?> emailsTo)
     {
         var result = new List<RouteItem>();
 

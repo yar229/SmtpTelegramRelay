@@ -1,11 +1,13 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using SmtpTelegramRelay.Services;
-using Telegram.Bot.Types.Enums;
+using SmtpTelegramRelay.Models;
+using SmtpTelegramRelay.Services.TelegramStores;
+using SmtpTelegramRelay.Services.TelegramStores.Models;
 
 namespace SmtpTelegramRelay.Controllers;
 
-public class TelegramController : Controller
+[ApiController]
+public class TelegramController : ControllerBase
 {
     private readonly TelegramStore _store;
 
@@ -15,17 +17,17 @@ public class TelegramController : Controller
     }
 
     [HttpGet("message")]
-    public Task Send([FromQuery] string? from, [FromQuery] string? to, [FromQuery] string? subject, [FromQuery] string? message,
-        [FromQuery] ParseMode parseMode)
-        => _store.SaveAsync(subject, message, from, to, parseMode, CancellationToken.None);
+    public async Task<IActionResult> Send([FromQuery] WebMessage webMessage)
+    {
+        await _store.SaveAsync(new TelegramMessage(webMessage), default);
+        return Ok();
+    }
 
     [HttpPost("message")]
-    public Task Photos([FromQuery] string? from, [FromQuery] string? to, [FromQuery] string? subject, [FromQuery] string? message,
-        [FromQuery] ParseMode parseMode,
-        [FromForm] IFormCollection files)
+    public async Task<IActionResult> Photos([FromQuery] WebMessage webMessage, [FromForm] IFormCollection formCollection)
     {
-        var streams = files.Files.Select(f => (f.FileName, f.OpenReadStream()));
-
-        return _store.SaveAsync(Enumerable.Repeat(from, 1), Enumerable.Repeat(to, 1), subject, message, streams, parseMode, CancellationToken.None);
+        var files = formCollection.Files.Select(f => (f.FileName, f.OpenReadStream()));
+        await _store.SaveAsync(new TelegramMessage(webMessage, files), default);
+        return Ok();
     }
 }

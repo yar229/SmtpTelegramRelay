@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Hosting;
 using SmtpTelegramRelay.Configuration;
 using SmtpTelegramRelay.Services;
+using SmtpTelegramRelay.Services.TelegramStores;
 using System.Runtime.InteropServices;
 
 namespace SmtpTelegramRelay;
