@@ -17,7 +17,9 @@ internal static class HtmlToTelegamHtmlMarkdown
         return sw.ToString();
     }
 
-    private const string CrLf = "\r\n";
+    private const string Cr = "\r";
+    private const string Lf = "\n";
+    private const string CrLf = $"{Cr}{Lf}";
     private const string Tab = "    ";
 
     private static Action<HtmlNode, TextWriter> ToTag(string tag)
@@ -139,8 +141,8 @@ internal static class HtmlToTelegamHtmlMarkdown
                     break;
                 if (html.Trim().Length > 0)
                     outText.Write(HtmlEntity.DeEntitize(html
-                        .Replace("\r", "", StringComparison.OrdinalIgnoreCase)
-                        .Replace("\n", "", StringComparison.OrdinalIgnoreCase)));
+                        .Replace(Cr, "", StringComparison.OrdinalIgnoreCase)
+                        .Replace(Lf, "", StringComparison.OrdinalIgnoreCase)));
                 break;
 
             case HtmlNodeType.Element:

@@ -10,8 +10,6 @@ using Microsoft.Extensions.Options;
 using Telegram.Bot.Types;
 using SmtpTelegramRelay.Configuration;
 using SmtpTelegramRelay.Extensions;
-using HtmlAgilityPack;
-using MimeKit.Text;
 using Telegram.Bot.Types.Enums;
 
 namespace SmtpTelegramRelay.Services;
@@ -19,46 +17,55 @@ namespace SmtpTelegramRelay.Services;
 public sealed class TelegramStore : MessageStore
 {
     private readonly IOptionsMonitor<RelayConfiguration> _options;
-    private readonly Dictionary<KeyValuePair<string, string>, RouteItem> _routes;
+    private readonly ILogger<TelegramStore> _logger;
+    private readonly Dictionary<(string, string), RouteItem> _routes;
+    private readonly Dictionary<string, Regex> _regexes;
     private TelegramBotClient? _bot;
     private string? _token;
 
     private const string Asterisk = "*";
 
-    public TelegramStore(IOptionsMonitor<RelayConfiguration> options)
+    public TelegramStore(IOptionsMonitor<RelayConfiguration> options, ILogger<TelegramStore> logger)
     {
         _options = options;
+        _logger = logger;
         _routes = options.CurrentValue.Routing
-            .ToDictionary(r => new KeyValuePair<string, string>(r.EmailFrom, r.EmailTo), r => r);
+            .ToDictionary(r => (r.EmailFrom, r.EmailTo), r => r);
+        _regexes = CompileRegexes(options);
     }
 
-    public async Task<SmtpResponse> SaveAsync(string? subject, string? message, IEnumerable<KeyValuePair<string, Stream>> files, IEnumerable<string> from, IEnumerable<string> to,
+    public async Task<SmtpResponse> SaveAsync(IEnumerable<string?> from, IEnumerable<string?> to,
+        string? subject, string? body, 
+        IEnumerable<(string Name, Stream Stream)> files,
         ParseMode parseMode, CancellationToken cancellationToken)
     {
         PrepareBot(_options.CurrentValue, cancellationToken);
 
+        var froms = from.Cast<string>().ToList();
+        var tos = to.Cast<string>().ToList();
         var medias = files
-            .Select(f => new InputMediaPhoto(new InputFileStream(f.Value, f.Key)))
+            .Select(f => new InputMediaPhoto(new InputFileStream(f.Stream, f.Name)))
             .ToList();
 
-        var froms = string.Join(",", from).Trim();
-        var tos = string.Join(",", to).Trim();
+        var strFrom = string.Join(",", froms).Trim();
+        var strTo = string.Join(",", tos).Trim();
         var text = new StringBuilder();
         if (!string.IsNullOrEmpty(subject))
             text.Append($"{subject}\r\n");
-        if (!string.IsNullOrEmpty(froms))
-            text.Append($"From: {froms}\r\n");
-        if (!string.IsNullOrEmpty(tos))
-            text.Append($"To: {tos}\r\n");
-        if (!string.IsNullOrEmpty(message))
-            text.Append(message);
+        if (!string.IsNullOrEmpty(strFrom))
+            text.Append($"From: {strFrom}\r\n");
+        if (!string.IsNullOrEmpty(strTo))
+            text.Append($"To: {strTo}\r\n");
+        if (!string.IsNullOrEmpty(body))
+            text.Append(body);
 
-        foreach (var chat in GetChats(from, to))
+        Regex? GetRegex(string? rx) => rx.IsNotNullOrEmpty(r => _regexes.TryGetValue(r, out var regex) ? regex : null);
+        bool IsMatch(string? str, string rgx) => str.IsNotNullOrEmpty(_ => GetRegex(rgx)) is { } irgx && irgx.IsMatch(str!);
+        foreach (var chat in GetChats(froms, tos))
         {
             var sb = new StringBuilder();
             foreach (var prefix in chat.Prefixes)
-                if (!string.IsNullOrWhiteSpace(prefix.RegexpSubject) && !string.IsNullOrEmpty(subject) && Regex.IsMatch(subject, prefix.RegexpSubject) ||
-                     !string.IsNullOrWhiteSpace(prefix.RegexpBody) && !string.IsNullOrEmpty(message) && Regex.IsMatch(message, prefix.RegexpBody))
+                if (IsMatch(subject, prefix.RegexpSubject) || IsMatch(body, prefix.RegexpBody))
                     sb.Append(prefix.Prefix);
             sb.Append(text);
 
@@ -84,9 +91,9 @@ public sealed class TelegramStore : MessageStore
         return SmtpResponse.Ok;
     }
 
-    public Task<SmtpResponse> SaveAsync(string? subject, string? message, string? from, string? to, 
+    public Task<SmtpResponse> SaveAsync(string? from, string? to, string? subject, string? body, 
         ParseMode parseMode, CancellationToken cancellationToken)
-        => SaveAsync(subject, message, Enumerable.Empty<KeyValuePair<string, Stream>>(), (from ?? string.Empty).Enumerate(), (to ?? string.Empty).Enumerate(),
+        => SaveAsync((from ?? string.Empty).Enumerate(), (to ?? string.Empty).Enumerate(), subject, body, Enumerable.Empty<(string, Stream)>(), 
             parseMode, cancellationToken);
 
 
@@ -117,7 +124,7 @@ public sealed class TelegramStore : MessageStore
             }
 
             fstream.Position = 0;
-            return new KeyValuePair<string, Stream>(fileName, fstream);
+            return (fileName, (Stream)fstream);
         }).ToList();
 
         List<string> Selector(InternetAddress addr) =>
@@ -141,8 +148,8 @@ public sealed class TelegramStore : MessageStore
             parseMode = ParseMode.Html;
         }
 
-        return await SaveAsync(message.Subject, text, files, xemailsFrom, xemailsTo, parseMode,
-            cancellationToken).ConfigureAwait(false);
+        return await SaveAsync(xemailsFrom, xemailsTo, message.Subject, text, files, parseMode, cancellationToken)
+            .ConfigureAwait(false);
     }
 
     private void PrepareBot(RelayConfiguration currentOptions, CancellationToken cancellationToken)
@@ -160,7 +167,7 @@ public sealed class TelegramStore : MessageStore
         _token = currentOptions.TelegramBotToken;
     }
 
-    private List<RouteItem> GetChats(IEnumerable<string> emailsFrom, IEnumerable<string> emailsTo)
+    private List<RouteItem> GetChats(List<string?> emailsFrom, List<string?> emailsTo)
     {
         var result = new List<RouteItem>();
 
@@ -168,13 +175,13 @@ public sealed class TelegramStore : MessageStore
         {
             foreach (var emailTo2 in emailsTo)
             {
-                if (_routes.TryGetValue(new KeyValuePair<string, string>(emailFrom2, emailTo2), out var route))
+                if (_routes.TryGetValue((emailFrom2, emailTo2), out var route))
                     result.Add(route);
-                else if (_routes.TryGetValue(new KeyValuePair<string, string>(Asterisk, emailTo2), out var route1))
+                else if (_routes.TryGetValue((Asterisk, emailTo2), out var route1))
                     result.Add(route1);
-                else if (_routes.TryGetValue(new KeyValuePair<string, string>(emailFrom2, Asterisk), out var route2))
+                else if (_routes.TryGetValue((emailFrom2, Asterisk), out var route2))
                     result.Add(route2);
-                else if (_routes.TryGetValue(new KeyValuePair<string, string>(Asterisk, Asterisk), out var route3))
+                else if (_routes.TryGetValue((Asterisk, Asterisk), out var route3))
                     result.Add(route3);
             }
         }
@@ -183,5 +190,22 @@ public sealed class TelegramStore : MessageStore
             .GroupBy(ch => ch.TelegramChatId)
             .Select(group => group.First())
             .ToList();
+    }
+
+    private Dictionary<string, Regex> CompileRegexes(IOptionsMonitor<RelayConfiguration> options)
+    {
+        Regex? Compile(string rg) => rg
+            .TryCatch(r => r.IsNotNullOrEmpty(str => new Regex(str, RegexOptions.Compiled)),
+                r => _logger.LogError($"Cannot compile regex '{r}'"));
+
+        var result = new Dictionary<string, Regex>();
+        foreach (var prefix in options.CurrentValue.Routing.SelectMany(r => r.Prefixes))
+        {
+            if (Compile(prefix.RegexpSubject) is { } subj)
+                result.TryAdd(prefix.RegexpSubject, subj);
+            if (Compile(prefix.RegexpBody) is { } body)
+                result.TryAdd(prefix.RegexpBody, body);
+        }
+        return result;
     }
 }
