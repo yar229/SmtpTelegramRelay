@@ -12,6 +12,9 @@ using SmtpTelegramRelay.Configuration;
 using SmtpTelegramRelay.Extensions;
 using SmtpTelegramRelay.Services.TelegramStores.Models;
 using Telegram.Bot.Types.Enums;
+using System.Diagnostics;
+using YamlDotNet.Serialization.NodeDeserializers;
+using SmtpTelegramRelay.Common;
 
 namespace SmtpTelegramRelay.Services.TelegramStores;
 
@@ -19,10 +22,9 @@ public sealed class TelegramStore : MessageStore
 {
     private readonly IOptionsMonitor<RelayConfiguration> _options;
     private readonly ILogger<TelegramStore> _logger;
-    private readonly Dictionary<(string, string), RouteItem> _routes;
+    private readonly Dictionary<(string, string), IEnumerable<RouteItem>> _routes;
     private readonly Dictionary<string, Regex> _regexes;
     private TelegramBotClient? _bot;
-    private string? _token;
 
     private const string Asterisk = "*";
 
@@ -30,17 +32,17 @@ public sealed class TelegramStore : MessageStore
     {
         _options = options;
         _logger = logger;
-        _routes = options.CurrentValue.Routing
-            .ToDictionary(r => (r.EmailFrom, r.EmailTo), r => r);
+        _routes = options.CurrentValue.Routing.GroupBy(r => (r.EmailFrom, r.EmailTo))
+            .ToDictionary(r => r.Key, r => r.AsEnumerable());
         _regexes = CompileRegexes(options);
+        PrepareBot(default);
     }
 
     public async Task<SmtpResponse> SaveAsync(TelegramMessage message, CancellationToken cancellationToken)
     {
-        PrepareBot(_options.CurrentValue, cancellationToken);
-
         var medias = message.Files
-            .Select(f => new InputMediaPhoto(new InputFileStream(f.Stream, f.Name)))
+            .Select(f => new {MediaType = InputMediaHelper.GetMediaType(Path.GetExtension(f.Name)), File = f })
+            .GroupBy(mt => mt.MediaType, mt => InputMediaHelper.GetInputMedia(mt.MediaType, new InputFileStream(mt.File.Stream, mt.File.Name)))
             .ToList();
         var text = new StringBuilder()
             .AppendNotEmpty(message.Subject, str => $"{str}\r\n")
@@ -50,7 +52,7 @@ public sealed class TelegramStore : MessageStore
 
         Regex? GetRegex(string? rx) => rx.IsNotNullOrEmpty(r => _regexes.TryGetValue(r, out var regex) ? regex : null);
         bool IsMatch(string? str, string rgx) => str.IsNotNullOrEmpty(_ => GetRegex(rgx)) is { } irgx && irgx.IsMatch(str!);
-        foreach (var chat in GetChats(message.From, message.To))
+        foreach (var chat in GetChats(message.From, message.To, message.ChatId))
         {
             var sb = new StringBuilder();
             foreach (var prefix in chat.Prefixes)
@@ -58,9 +60,8 @@ public sealed class TelegramStore : MessageStore
                     sb.Append(prefix.Prefix);
             sb.Append(text);
 
-
             foreach (var part in sb.ToString().Chunk(4096))
-                await _bot!.SendMessage(chat.TelegramChatId,  new string(part), parseMode: message.ParseMode, linkPreviewOptions: new LinkPreviewOptions { IsDisabled = true },
+                await _bot!.SendMessage(chat.TelegramChatId,  new string(part), parseMode: message.ParseMode,  linkPreviewOptions: new LinkPreviewOptions { IsDisabled = true },
                         cancellationToken: cancellationToken)
                     .ConfigureAwait(false);
 
@@ -69,9 +70,12 @@ public sealed class TelegramStore : MessageStore
 
             await _bot!.SendChatAction(chat.TelegramChatId, ChatAction.UploadDocument,
                 cancellationToken: cancellationToken);
-            await _bot!.SendMediaGroup(chat.TelegramChatId, medias, disableNotification: true,
-                    cancellationToken: cancellationToken) //TODO: upload files once, then send by ids
-                .ConfigureAwait(false);
+            foreach (var mediaList in medias)
+            {
+                await _bot!.SendMediaGroup(chat.TelegramChatId, mediaList, disableNotification: true,
+                        cancellationToken: cancellationToken) //TODO: upload files once, then send by ids
+                    .ConfigureAwait(false);
+            }
         }
 
         return SmtpResponse.Ok;
@@ -140,22 +144,39 @@ public sealed class TelegramStore : MessageStore
             .ConfigureAwait(false);
     }
 
-    private void PrepareBot(RelayConfiguration currentOptions, CancellationToken cancellationToken)
+    private void PrepareBot(CancellationToken cancellationToken)
     {
-        if (_token != currentOptions.TelegramBotToken)
+        _bot = new TelegramBotClient(_options.CurrentValue.TelegramBotToken);
+        _bot.OnMessage += async (message, _) =>
         {
-            _bot?.Close(cancellationToken);
-            _bot = null;
-        }
+            if (message.Text is null || !message.Text.StartsWith('/'))
+                return;
+            if (message.Text == "/chatid")
+                await _bot.SendMessage(message.Chat, $"{message.Chat.Id}", cancellationToken: cancellationToken);
 
-        if (_bot != null)
-            return;
+            foreach (var action in _routes.Values
+                         .SelectMany(r => r)
+                         .Where(r => r.TelegramChatId == message.Chat.Id)
+                         .SelectMany(r => r.Actions.Where(a => $"/{a.Name}" == message.Text.Trim())))
+            {
+                ProcessStartInfo startInfo = new ProcessStartInfo();
+                startInfo.FileName = @"powershell.exe";
+                startInfo.Arguments = $" {action.Command} {message.Chat.Id}";
+                startInfo.RedirectStandardOutput = true;
+                startInfo.RedirectStandardError = true;
+                startInfo.UseShellExecute = false;
+                startInfo.CreateNoWindow = true;
+                Process process = new Process();
+                process.StartInfo = startInfo;
+                process.Start();
 
-        _bot = new TelegramBotClient(currentOptions.TelegramBotToken);
-        _token = currentOptions.TelegramBotToken;
+                string output = process.StandardOutput.ReadToEnd();
+                string errors = process.StandardError.ReadToEnd();
+            }
+        };
     }
 
-    private List<RouteItem> GetChats(IEnumerable<string?> emailsFrom, IEnumerable<string?> emailsTo)
+    private List<RouteItem> GetChats(IEnumerable<string?> emailsFrom, IEnumerable<string?> emailsTo, long? chatId)
     {
         var result = new List<RouteItem>();
 
@@ -163,18 +184,19 @@ public sealed class TelegramStore : MessageStore
         {
             foreach (var emailTo2 in emailsTo)
             {
-                if (_routes.TryGetValue((emailFrom2, emailTo2), out var route))
-                    result.Add(route);
-                else if (_routes.TryGetValue((Asterisk, emailTo2), out var route1))
-                    result.Add(route1);
-                else if (_routes.TryGetValue((emailFrom2, Asterisk), out var route2))
-                    result.Add(route2);
-                else if (_routes.TryGetValue((Asterisk, Asterisk), out var route3))
-                    result.Add(route3);
+                if (_routes.TryGetValue((emailFrom2, emailTo2), out var routes))
+                    result.AddRange(routes);
+                else if (_routes.TryGetValue((Asterisk, emailTo2), out var routes1))
+                    result.AddRange(routes1);
+                else if (_routes.TryGetValue((emailFrom2, Asterisk), out var routes2))
+                    result.AddRange(routes2);
+                else if (_routes.TryGetValue((Asterisk, Asterisk), out var routes3))
+                    result.AddRange(routes3);
             }
         }
 
         return result
+            .Where(r => null == chatId || r.TelegramChatId == chatId)
             .GroupBy(ch => ch.TelegramChatId)
             .Select(group => group.First())
             .ToList();

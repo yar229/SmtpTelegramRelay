@@ -16,6 +16,7 @@ namespace SmtpTelegramRelay.Services.TelegramStores.Models
             Subject = msg.Subject;
             Body = msg.Body;
             ParseMode = msg.ParseMode;
+            ChatId = msg.ChatId;
         }
 
         public TelegramMessage(WebMessage msg, IEnumerable<(string Name, Stream Stream)> files) : this(msg)
@@ -34,5 +35,7 @@ namespace SmtpTelegramRelay.Services.TelegramStores.Models
         public IEnumerable<(string Name, Stream Stream)> Files { get; init; } = Enumerable.Empty<(string Name, Stream Stream)>();
 
         public ParseMode ParseMode { get; init; } = ParseMode.None;
+
+        public long? ChatId { get; init; }
     }
 }

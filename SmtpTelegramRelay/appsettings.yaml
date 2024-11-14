@@ -31,9 +31,12 @@ Routing:
     Prefixes:
     -   RegexpSubject: "\\.*"
         Prefix: "🎲 "
+    Actions:
+    -   Name: "more"
+        Command: "D:\\1.ps1"
 -   EmailTo: "*"
     EmailFrom: "*"
-    TelegramChatId: CHAT_ID_ONE_TO_ONE_OR_GROUP
+    TelegramChatId: ANOTHER_CHAT_ID_ONE_TO_ONE_OR_GROUP
 # Logging Level. Set to Debug to see the details of the communication between your mail program and the relay.
 # Set to Error to see less information
 Logging:

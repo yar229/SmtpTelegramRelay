@@ -22,6 +22,8 @@ public sealed class RouteItem
     public long TelegramChatId { get; set; }
 
     public Collection<PrefixItem> Prefixes { get; } = new();
+
+    public Collection<ActionItem> Actions { get; } = new();
 }
 
 public sealed class PrefixItem
@@ -29,5 +31,11 @@ public sealed class PrefixItem
     public string RegexpSubject { get; set; } = default!;
     public string RegexpBody { get; set; } = default!;
     public string Prefix { get; set; } = default!;
+}
+
+public sealed class ActionItem
+{
+    public string Name { get; set; } = default!;
+    public string Command { get; set; } = default!;
 }
 

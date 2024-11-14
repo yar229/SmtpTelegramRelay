@@ -19,4 +19,8 @@ public class WebMessage
 
     [FromQuery(Name = "parseMode")]
     public ParseMode ParseMode { get; set; }
+
+    [FromQuery(Name = "chatId")]
+    public long? ChatId { get; set; }
+
 }
