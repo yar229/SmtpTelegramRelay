@@ -18,7 +18,7 @@ public class WebMessage
     public string? Body { get; set; }
 
     [FromQuery(Name = "parseMode")]
-    public ParseMode ParseMode { get; set; }
+    public ParseMode? ParseMode { get; set; }
 
     [FromQuery(Name = "chatId")]
     public long? ChatId { get; set; }

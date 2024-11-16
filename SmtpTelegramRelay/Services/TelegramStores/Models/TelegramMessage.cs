@@ -15,7 +15,7 @@ namespace SmtpTelegramRelay.Services.TelegramStores.Models
             To = Enumerable.Repeat(msg.To, 1);
             Subject = msg.Subject;
             Body = msg.Body;
-            ParseMode = msg.ParseMode;
+            ParseMode = msg.ParseMode ?? ParseMode.None;
             ChatId = msg.ChatId;
         }
 
