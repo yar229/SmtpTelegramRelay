@@ -15,6 +15,7 @@ using Telegram.Bot.Types.Enums;
 using System.Diagnostics;
 using YamlDotNet.Serialization.NodeDeserializers;
 using SmtpTelegramRelay.Common;
+using Microsoft.AspNetCore.Http;
 
 namespace SmtpTelegramRelay.Services.TelegramStores;
 
@@ -40,10 +41,6 @@ public sealed class TelegramStore : MessageStore
 
     public async Task<SmtpResponse> SaveAsync(TelegramMessage message, CancellationToken cancellationToken)
     {
-        var medias = message.Files
-            .Select(f => new {MediaType = InputMediaHelper.GetMediaType(Path.GetExtension(f.Name)), File = f })
-            .GroupBy(mt => mt.MediaType, mt => InputMediaHelper.GetInputMedia(mt.MediaType, new InputFileStream(mt.File.Stream, mt.File.Name)))
-            .ToList();
         var text = new StringBuilder()
             .AppendNotEmpty(message.Subject, str => $"{str}\r\n")
             .AppendNotEmpty(string.Join(",", message.From).Trim(), str => $"From: {str}\r\n")
@@ -65,17 +62,28 @@ public sealed class TelegramStore : MessageStore
                         cancellationToken: cancellationToken)
                     .ConfigureAwait(false);
 
+            var medias = message.Files
+                .Select(f => new { MediaType = InputMediaHelper.GetMediaType(Path.GetExtension(f.Name)), File = f })
+                .GroupBy(mt => mt.MediaType, mt =>
+                {
+                    mt.File.Stream.Position = 0;
+                    var ms = new MemoryStream();
+                    {
+                        mt.File.Stream.CopyTo(ms);
+                        ms.Position = 0;
+                    }
+                    return InputMediaHelper.GetInputMedia(mt.MediaType, new InputFileStream(ms, mt.File.Name));
+                }).ToList();
             if (medias.Count <= 0) 
                 continue;
 
             await _bot!.SendChatAction(chat.TelegramChatId, ChatAction.UploadDocument,
                 cancellationToken: cancellationToken);
+
             foreach (var mediaList in medias)
-            {
                 await _bot!.SendMediaGroup(chat.TelegramChatId, mediaList, disableNotification: true,
                         cancellationToken: cancellationToken) //TODO: upload files once, then send by ids
                     .ConfigureAwait(false);
-            }
         }
 
         return SmtpResponse.Ok;
