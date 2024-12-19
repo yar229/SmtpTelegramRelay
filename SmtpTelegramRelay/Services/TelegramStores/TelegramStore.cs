@@ -57,11 +57,6 @@ public sealed class TelegramStore : MessageStore
                     sb.Append(prefix.Prefix);
             sb.Append(text);
 
-            foreach (var part in sb.ToString().Chunk(4096))
-                await _bot!.SendMessage(chat.TelegramChatId,  new string(part), parseMode: message.ParseMode,  linkPreviewOptions: new LinkPreviewOptions { IsDisabled = true },
-                        cancellationToken: cancellationToken)
-                    .ConfigureAwait(false);
-
             var medias = message.Files
                 .Select(f => new { MediaType = InputMediaHelper.GetMediaType(Path.GetExtension(f.Name)), File = f })
                 .GroupBy(mt => mt.MediaType, mt =>
@@ -74,10 +69,32 @@ public sealed class TelegramStore : MessageStore
                     }
                     return InputMediaHelper.GetInputMedia(mt.MediaType, new InputFileStream(ms, mt.File.Name));
                 }).ToList();
-            if (medias.Count <= 0) 
+
+            //dirty
+            if (medias.Count == 1 && medias[0].Count() == 1 && sb.Length < 1024)
+            {
+                var doc = (medias[0].First() as InputMedia)?.Media;
+                var sentMessage = medias[0].Key switch
+                {
+                    InputMediaType.Document => await _bot!.SendDocument(chat.TelegramChatId, doc, sb.ToString(), parseMode: message.ParseMode,
+                        cancellationToken: cancellationToken),
+                    InputMediaType.Photo => await _bot!.SendPhoto(chat.TelegramChatId, doc, sb.ToString(), showCaptionAboveMedia: true, parseMode: message.ParseMode,
+                        cancellationToken: cancellationToken),
+                    _ => null
+                };
+                if (sentMessage != null)
+                    continue;
+            }
+
+            foreach (var part in sb.ToString().Chunk(4096))
+                await _bot!.SendMessage(chat.TelegramChatId, new string(part), parseMode: message.ParseMode, linkPreviewOptions: new LinkPreviewOptions { IsDisabled = true },
+                        cancellationToken: cancellationToken)
+                    .ConfigureAwait(false);
+
+            if (medias.Count <= 0)
                 continue;
 
-            await _bot!.SendChatAction(chat.TelegramChatId, ChatAction.UploadDocument,
+            await _bot!.SendChatAction(chat.TelegramChatId, ChatAction.UploadDocument, 
                 cancellationToken: cancellationToken);
 
             foreach (var mediaList in medias)
@@ -132,7 +149,7 @@ public sealed class TelegramStore : MessageStore
 
         string text = string.Empty;
         var parseMode = ParseMode.None;
-        if (!string.IsNullOrEmpty(message.TextBody))
+        if (!string.IsNullOrEmpty(message. TextBody))
             text = message.TextBody;
         else if (!string.IsNullOrEmpty(message.HtmlBody))
         {
@@ -192,9 +209,9 @@ public sealed class TelegramStore : MessageStore
         {
             foreach (var emailTo2 in emailsTo)
             {
-                if (_routes.TryGetValue((emailFrom2, emailTo2), out var routes))
+                if (_routes.TryGetValue((emailFrom2, emailTo2 ?? Asterisk), out var routes))
                     result.AddRange(routes);
-                else if (_routes.TryGetValue((Asterisk, emailTo2), out var routes1))
+                else if (_routes.TryGetValue((Asterisk, emailTo2 ?? Asterisk), out var routes1))
                     result.AddRange(routes1);
                 else if (_routes.TryGetValue((emailFrom2, Asterisk), out var routes2))
                     result.AddRange(routes2);
@@ -203,11 +220,13 @@ public sealed class TelegramStore : MessageStore
             }
         }
 
-        return result
+        result = result
             .Where(r => null == chatId || r.TelegramChatId == chatId)
             .GroupBy(ch => ch.TelegramChatId)
             .Select(group => group.First())
             .ToList();
+
+        return result;
     }
 
     private Dictionary<string, Regex> CompileRegexes(IOptionsMonitor<RelayConfiguration> options)
