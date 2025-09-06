@@ -23,4 +23,6 @@ public class WebMessage
     [FromQuery(Name = "chatId")]
     public long? ChatId { get; set; }
 
+    [FromQuery(Name = "hideFrom")]
+    public bool? DoHideFrom { get; set; }
 }

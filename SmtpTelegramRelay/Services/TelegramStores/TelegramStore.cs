@@ -43,7 +43,7 @@ public sealed class TelegramStore : MessageStore
     {
         var text = new StringBuilder()
             .AppendNotEmpty(message.Subject, str => $"{str}\r\n")
-            .AppendNotEmpty(string.Join(",", message.From).Trim(), str => $"From: {str}\r\n")
+            .AppendIf(!message.DoHideFrom, string.Join(",", message.From).Trim(), str => $"From: {str}\r\n")
             .AppendNotEmpty(string.Join(",", message.To).Trim(), str => $"To: {str}\r\n")
             .Append(message.Body);
 

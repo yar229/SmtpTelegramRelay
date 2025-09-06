@@ -17,6 +17,7 @@ namespace SmtpTelegramRelay.Services.TelegramStores.Models
             Body = msg.Body;
             ParseMode = msg.ParseMode ?? ParseMode.None;
             ChatId = msg.ChatId;
+            DoHideFrom = msg.DoHideFrom ?? false;
         }
 
         public TelegramMessage(WebMessage msg, IEnumerable<(string Name, Stream Stream)> files) : this(msg)
@@ -37,5 +38,7 @@ namespace SmtpTelegramRelay.Services.TelegramStores.Models
         public ParseMode ParseMode { get; init; } = ParseMode.None;
 
         public long? ChatId { get; init; }
+
+        public bool DoHideFrom { get; init; }
     }
 }

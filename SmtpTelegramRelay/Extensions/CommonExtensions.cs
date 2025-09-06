@@ -12,6 +12,13 @@ namespace SmtpTelegramRelay.Extensions
             return sb;
         }
 
+        public static StringBuilder AppendIf(this StringBuilder sb, bool doAppend, string? data, Func<string, string> func)
+        {
+            if (doAppend)
+                sb = sb.AppendNotEmpty(data, func);
+            return sb;
+        }
+
         public static T? IsNotNullOrEmpty<T>(this string? data, Func<string, T?> func) where T : class
             => string.IsNullOrEmpty(data)
                 ? null 
