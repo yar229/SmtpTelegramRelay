@@ -53,7 +53,7 @@ public sealed class TelegramStore : MessageStore
         {
             var sb = new StringBuilder();
             foreach (var prefix in chat.Prefixes)
-                if (IsMatch(message.Subject, prefix.RegexpSubject) || IsMatch(message.Body, prefix.RegexpBody))
+                if (!message.DoHideFrom && (IsMatch(message.Subject, prefix.RegexpSubject) || IsMatch(message.Body, prefix.RegexpBody)))
                     sb.Append(prefix.Prefix);
             sb.Append(text);
 
