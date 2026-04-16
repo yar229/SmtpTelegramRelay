@@ -1,21 +1,20 @@
-﻿using MimeKit;
+﻿using Microsoft.Extensions.Options;
+using MimeKit;
 using SmtpServer;
-using SmtpServer.Storage;
 using SmtpServer.Protocol;
-using System.Buffers;
-using System.Text;
-using System.Text.RegularExpressions;
-using Telegram.Bot;
-using Microsoft.Extensions.Options;
-using Telegram.Bot.Types;
+using SmtpServer.Storage;
+using SmtpTelegramRelay.Common;
 using SmtpTelegramRelay.Configuration;
 using SmtpTelegramRelay.Extensions;
 using SmtpTelegramRelay.Services.TelegramStores.Models;
-using Telegram.Bot.Types.Enums;
+using System.Buffers;
 using System.Diagnostics;
-using YamlDotNet.Serialization.NodeDeserializers;
-using SmtpTelegramRelay.Common;
-using Microsoft.AspNetCore.Http;
+using System.Net;
+using System.Text;
+using System.Text.RegularExpressions;
+using Telegram.Bot;
+using Telegram.Bot.Types;
+using Telegram.Bot.Types.Enums;
 
 namespace SmtpTelegramRelay.Services.TelegramStores;
 
@@ -171,7 +170,15 @@ public sealed class TelegramStore : MessageStore
 
     private void PrepareBot(CancellationToken cancellationToken)
     {
-        _bot = new TelegramBotClient(_options.CurrentValue.TelegramBotToken);
+        if (_options.CurrentValue.UseProxy)
+        {
+            WebProxy proxy = new(_options.CurrentValue.Proxy);
+            HttpClient httpClient = new(new SocketsHttpHandler { Proxy = proxy, UseProxy = true });
+            _bot = new TelegramBotClient(_options.CurrentValue.TelegramBotToken, httpClient);
+        }
+        else
+            _bot = new TelegramBotClient(_options.CurrentValue.TelegramBotToken);
+
         _bot.OnMessage += async (message, _) =>
         {
             if (message.Text is null || !message.Text.StartsWith('/'))
@@ -184,15 +191,19 @@ public sealed class TelegramStore : MessageStore
                          .Where(r => r.TelegramChatId == message.Chat.Id)
                          .SelectMany(r => r.Actions.Where(a => $"/{a.Name}" == message.Text.Trim())))
             {
-                ProcessStartInfo startInfo = new ProcessStartInfo();
-                startInfo.FileName = @"powershell.exe";
-                startInfo.Arguments = $" {action.Command} {message.Chat.Id}";
-                startInfo.RedirectStandardOutput = true;
-                startInfo.RedirectStandardError = true;
-                startInfo.UseShellExecute = false;
-                startInfo.CreateNoWindow = true;
-                Process process = new Process();
-                process.StartInfo = startInfo;
+                ProcessStartInfo startInfo = new ProcessStartInfo
+                {
+                    FileName = @"powershell.exe",
+                    Arguments = $" {action.Command} {message.Chat.Id}",
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
+                Process process = new Process
+                {
+                    StartInfo = startInfo
+                };
                 process.Start();
 
                 string output = process.StandardOutput.ReadToEnd();

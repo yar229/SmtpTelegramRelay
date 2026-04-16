@@ -1,4 +1,6 @@
-﻿HttpAddress: "*"
+﻿UseProxy: true
+Proxy: "socks5://proxy.loc:1080"
+HttpAddress: "*"
 HttpPort: 5026
 SmtpAddress: "*"
 SmtpPort: 5025
@@ -18,13 +20,7 @@ Routing:
     TelegramChatId: CHAT_ID_ONE_TO_ONE_OR_GROUP
     Prefixes:
     -   RegexpSubject: "supply\\s+normal"
-        Prefix: "🟢⚡️ "
-    -   RegexpSubject: "supply\\s+fault"
-        Prefix: "🔴⚡️ "
-    -   RegexpSubject: "UPS\\s+connected"
-        Prefix: "🟢⚡️ "
-    -   RegexpSubject: "UPS\\s+Report"
-        Prefix: "📋⚡️ "
+
 -   EmailTo: "*"
     EmailFrom: randomphoto@mrhyde.loc
     TelegramChatId: ANOTHER_CHAT_ID_ONE_TO_ONE_OR_GROUP
@@ -39,6 +35,3 @@ Routing:
     TelegramChatId: ANOTHER_CHAT_ID_ONE_TO_ONE_OR_GROUP
 # Logging Level. Set to Debug to see the details of the communication between your mail program and the relay.
 # Set to Error to see less information
-Logging:
-  LogLevel:
-    Default: Debug

@@ -4,6 +4,9 @@ namespace SmtpTelegramRelay.Configuration;
 
 public sealed class RelayConfiguration
 {
+    public bool UseProxy { get; set; } = default!;
+    public string Proxy { get; set; } = default!;
+
     public string HttpIp { get; set; } = default!;
     public ushort HttpPort { get; set; } = 80;
 

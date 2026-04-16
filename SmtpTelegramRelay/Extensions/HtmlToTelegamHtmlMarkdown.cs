@@ -43,8 +43,8 @@ internal static class HtmlToTelegamHtmlMarkdown
             foreach (var tag in tags)
                 tw.Write($"<{tag}>");
             ConvertContentTo(node, tw);
-            foreach (var tag in tags.Reverse())
-                tw.Write($"</{tag}>");
+            for (int i = tags.Length - 1;  i >= 0; i--)
+                tw.Write($"</{tags[i]}>");
             tw.Write(after);
         };
 
