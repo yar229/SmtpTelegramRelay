@@ -53,6 +53,37 @@ SmtpTelegramRelay is an SMTP server that relays all received emails to specified
     "LogLevel": {
       "Default": "Debug"
     }
+  },
+  // NLog writes logs to the console and to a file in the logs folder.
+  // To see more or fewer details change "minlevel" of the last rule (logger "*").
+  "NLog": {
+    "targets": {
+      "File": {
+        "type": "File",
+        "fileName": "logs/${shortdate}.log",
+        "layout": {
+          "type": "CsvLayout",
+          "quoting": "Auto",
+          "withHeader": false,
+          "delimiter": "Tab",
+          "columns": [
+            { "name": "DateTime", "layout": "${longdate}" },
+            { "name": "Severity", "layout": "${uppercase:${level}}" },
+            { "name": "Message", "layout": "${message}" },
+            { "name": "Exception", "layout": "${exception:format=tostring}" }
+          ]
+        }
+      },
+      "Console": {
+        "type": "ColoredConsole"
+      }
+    },
+    "rules": [
+      { "logger": "Microsoft.Hosting.Lifetime", "minlevel": "Info", "writeTo": "Console, File", "final": true },
+      { "logger": "Microsoft.*", "maxlevel": "Debug", "final": true },
+      { "logger": "System.Net.Http.*", "maxlevel": "Debug", "final": true },
+      { "logger": "*", "minlevel": "Trace", "writeTo": "Console, File" }
+    ]
   }
 }
 ```

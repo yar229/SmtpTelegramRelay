@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore;
 using Microsoft.AspNetCore.Hosting;
+using NLog.Extensions.Logging;
 using NLog.Web;
 
 namespace SmtpTelegramRelay;
@@ -17,6 +18,8 @@ public static class Program
             .AddJsonFile("appsettings.json", optional: true)
             .AddJsonFile($"appsettings.{environment.ToLowerInvariant()}.json", optional: true)
             .Build();
+
+        NLog.LogManager.Setup().LoadConfigurationFromSection(config);
 
         IWebHost webHost = WebHost
             .CreateDefaultBuilder()

@@ -46,12 +46,6 @@
 	</ItemGroup>
 
 	<ItemGroup>
-	  <Content Update="nlog.config">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </Content>
-	</ItemGroup>
-
-	<ItemGroup>
 	  <None Update="appsettings.json">
 	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 	  </None>
