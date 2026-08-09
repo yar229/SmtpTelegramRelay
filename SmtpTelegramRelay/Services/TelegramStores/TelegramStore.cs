@@ -21,7 +21,7 @@ namespace SmtpTelegramRelay.Services.TelegramStores;
 
 public sealed class TelegramStore : MessageStore
 {
-    private readonly IOptionsMonitor<RelayConfiguration> _options;
+    private readonly IOptions<RelayConfiguration> _options;
     private readonly ILogger<TelegramStore> _logger;
     private readonly Dictionary<(string, string), IEnumerable<RouteItem>> _routes;
     private readonly Dictionary<string, Regex> _regexes;
@@ -29,11 +29,11 @@ public sealed class TelegramStore : MessageStore
 
     private const string Asterisk = "*";
 
-    public TelegramStore(IOptionsMonitor<RelayConfiguration> options, ILogger<TelegramStore> logger)
+    public TelegramStore(IOptions<RelayConfiguration> options, ILogger<TelegramStore> logger)
     {
         _options = options;
         _logger = logger;
-        _routes = options.CurrentValue.Routing.GroupBy(r => (r.EmailFrom, r.EmailTo))
+        _routes = options.Value.Routing.GroupBy(r => (r.EmailFrom, r.EmailTo))
             .ToDictionary(r => r.Key, r => r.AsEnumerable());
         _regexes = CompileRegexes(options);
         PrepareBot();
@@ -253,14 +253,14 @@ public sealed class TelegramStore : MessageStore
 
     private void PrepareBot()
     {
-        if (_options.CurrentValue.UseProxy)
+        if (_options.Value.UseProxy)
         {
-            WebProxy proxy = new(_options.CurrentValue.Proxy);
+            WebProxy proxy = new(_options.Value.Proxy);
             HttpClient httpClient = new(new SocketsHttpHandler { Proxy = proxy, UseProxy = true });
-            _bot = new TelegramBotClient(_options.CurrentValue.TelegramBotToken, httpClient);
+            _bot = new TelegramBotClient(_options.Value.TelegramBotToken, httpClient);
         }
         else
-            _bot = new TelegramBotClient(_options.CurrentValue.TelegramBotToken);
+            _bot = new TelegramBotClient(_options.Value.TelegramBotToken);
 
         _bot.OnMessage += async (message, _) =>
         {
@@ -341,14 +341,14 @@ public sealed class TelegramStore : MessageStore
         return result;
     }
 
-    private Dictionary<string, Regex> CompileRegexes(IOptionsMonitor<RelayConfiguration> options)
+    private Dictionary<string, Regex> CompileRegexes(IOptions<RelayConfiguration> options)
     {
         Regex? Compile(string rg) => rg
             .TryCatch(r => r.IsNotNullOrEmpty(str => new Regex(str, RegexOptions.Compiled)),
                 r => _logger.LogError($"Cannot compile regex '{r}'"));
 
         var result = new Dictionary<string, Regex>();
-        foreach (var prefix in options.CurrentValue.Routing.SelectMany(r => r.Prefixes))
+        foreach (var prefix in options.Value.Routing.SelectMany(r => r.Prefixes))
         {
             if (Compile(prefix.RegexpSubject) is { } subj)
                 result.TryAdd(prefix.RegexpSubject, subj);

@@ -12,13 +12,13 @@ public sealed class SmtpServerBuilder
     private readonly ILogger<SmtpServerBuilder> _logger;
     private readonly SmtpServer.SmtpServer _server;
 
-    public SmtpServerBuilder(TelegramStore store, IOptionsMonitor<RelayConfiguration> options, ILogger<SmtpServerBuilder> logger)
+    public SmtpServerBuilder(TelegramStore store, IOptions<RelayConfiguration> options, ILogger<SmtpServerBuilder> logger)
     {
         _logger = logger;
 
         var serverOptions = new SmtpServerOptionsBuilder()
-            .ServerName(options.CurrentValue.SmtpAddress)
-            .Port(options.CurrentValue.SmtpPort)
+            .ServerName(options.Value.SmtpAddress)
+            .Port(options.Value.SmtpPort)
             .Build();
 
         var telegramStore = new SmtpServer.ComponentModel.ServiceProvider();
