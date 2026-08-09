@@ -26,8 +26,18 @@ public class TelegramController : ControllerBase
     [HttpPost("message")]
     public async Task<IActionResult> Photos([FromQuery] WebMessage webMessage, [FromForm] IFormCollection formCollection)
     {
-        var files = formCollection.Files.Select(f => (f.FileName, f.OpenReadStream()));
-        await _store.SaveAsync(new TelegramMessage(webMessage, files), HttpContext.RequestAborted).ConfigureAwait(false);
-        return Ok();
+        var files = formCollection.Files
+            .Select(f => (f.FileName, (Stream)f.OpenReadStream()))
+            .ToArray();
+        try
+        {
+            await _store.SaveAsync(new TelegramMessage(webMessage, files), default).ConfigureAwait(false);
+            return Ok();
+        }
+        finally
+        {
+            foreach (var (_, stream) in files)
+                await stream.DisposeAsync().ConfigureAwait(false);
+        }
     }
 }
