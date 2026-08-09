@@ -192,7 +192,7 @@ public sealed class TelegramStore : MessageStore
             if (message.Text is null || !message.Text.StartsWith('/'))
                 return;
             if (message.Text == "/chatid")
-                await _bot.SendMessage(message.Chat, $"{message.Chat.Id}", cancellationToken: cancellationToken);
+                await _bot.SendMessage(message.Chat, $"{message.Chat.Id}", cancellationToken: cancellationToken).ConfigureAwait(false);
 
             foreach (var action in _routes.Values
                          .SelectMany(r => r)
@@ -214,8 +214,8 @@ public sealed class TelegramStore : MessageStore
                 };
                 process.Start();
 
-                string output = process.StandardOutput.ReadToEnd();
-                string errors = process.StandardError.ReadToEnd();
+                string output = await process.StandardOutput.ReadToEndAsync().ConfigureAwait(false);
+                string errors = await process.StandardError.ReadToEndAsync().ConfigureAwait(false);
             }
         };
     }
