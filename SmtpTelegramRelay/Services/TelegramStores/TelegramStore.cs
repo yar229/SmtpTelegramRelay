@@ -13,6 +13,7 @@ using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
 using Telegram.Bot;
+using Telegram.Bot.Exceptions;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 
@@ -75,10 +76,18 @@ public sealed class TelegramStore : MessageStore
                 var doc = (medias[0].First() as InputMedia)?.Media;
                 var sentMessage = medias[0].Key switch
                 {
-                    InputMediaType.Document => await _bot!.SendDocument(chat.TelegramChatId, doc, sb.ToString(), parseMode: message.ParseMode,
-                        cancellationToken: cancellationToken),
-                    InputMediaType.Photo => await _bot!.SendPhoto(chat.TelegramChatId, doc, sb.ToString(), showCaptionAboveMedia: true, parseMode: message.ParseMode,
-                        cancellationToken: cancellationToken),
+                    InputMediaType.Document => await SendWithRetryAsync(() =>
+                    {
+                        ResetMediaPositions(medias);
+                        return _bot!.SendDocument(chat.TelegramChatId, doc, sb.ToString(), parseMode: message.ParseMode,
+                            cancellationToken: cancellationToken);
+                    }, cancellationToken),
+                    InputMediaType.Photo => await SendWithRetryAsync(() =>
+                    {
+                        ResetMediaPositions(medias);
+                        return _bot!.SendPhoto(chat.TelegramChatId, doc, sb.ToString(), showCaptionAboveMedia: true, parseMode: message.ParseMode,
+                            cancellationToken: cancellationToken);
+                    }, cancellationToken),
                     _ => null
                 };
                 if (sentMessage != null)
@@ -86,20 +95,29 @@ public sealed class TelegramStore : MessageStore
             }
 
             foreach (var part in sb.ToString().Chunk(4096))
-                await _bot!.SendMessage(chat.TelegramChatId, new string(part), parseMode: message.ParseMode, linkPreviewOptions: new LinkPreviewOptions { IsDisabled = true },
-                        cancellationToken: cancellationToken)
-                    .ConfigureAwait(false);
+                await SendWithRetryAsync(() =>
+                        _bot!.SendMessage(chat.TelegramChatId, new string(part), parseMode: message.ParseMode, linkPreviewOptions: new LinkPreviewOptions { IsDisabled = true },
+                            cancellationToken: cancellationToken),
+                    cancellationToken)
+                .ConfigureAwait(false);
 
             if (medias.Count <= 0)
                 continue;
 
-            await _bot!.SendChatAction(chat.TelegramChatId, ChatAction.UploadDocument, 
-                cancellationToken: cancellationToken);
+            await SendWithRetryAsync(() =>
+                    _bot!.SendChatAction(chat.TelegramChatId, ChatAction.UploadDocument,
+                        cancellationToken: cancellationToken),
+                cancellationToken)
+            .ConfigureAwait(false);
 
             foreach (var mediaList in medias)
-                await _bot!.SendMediaGroup(chat.TelegramChatId, mediaList, disableNotification: true,
-                        cancellationToken: cancellationToken) //TODO: upload files once, then send by ids
-                    .ConfigureAwait(false);
+                await SendWithRetryAsync(() =>
+                    {
+                        ResetMediaPositions(medias);
+                        return _bot!.SendMediaGroup(chat.TelegramChatId, mediaList, disableNotification: true,
+                            cancellationToken: cancellationToken); //TODO: upload files once, then send by ids
+                    }, cancellationToken)
+                .ConfigureAwait(false);
         }
 
         return SmtpResponse.Ok;
@@ -174,6 +192,44 @@ public sealed class TelegramStore : MessageStore
             throw new InvalidOperationException("Telegram bot is not initialized");
 
         await _bot.GetMe(cancellationToken).ConfigureAwait(false);
+    }
+
+    private const int MaxTelegramRetries = 3;
+
+    private static bool IsRetryable(Exception ex) => ex switch
+    {
+        ApiRequestException api when api.ErrorCode is >= 400 and < 500 and not 408 and not 429 => false,
+        _ => true
+    };
+
+    private async Task<T> SendWithRetryAsync<T>(Func<Task<T>> action, CancellationToken cancellationToken)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                return await action().ConfigureAwait(false);
+            }
+            catch (Exception ex) when (attempt < MaxTelegramRetries && IsRetryable(ex) && !cancellationToken.IsCancellationRequested)
+            {
+                var delay = TimeSpan.FromSeconds(Math.Min(30, Math.Pow(2, attempt - 1)));
+                _logger.LogWarning(ex, "Telegram API call failed (attempt {Attempt}/{MaxAttempts}); retrying in {Delay}",
+                    attempt, MaxTelegramRetries, delay);
+                await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
+            }
+        }
+    }
+
+    private Task SendWithRetryAsync(Func<Task> action, CancellationToken cancellationToken)
+        => SendWithRetryAsync(
+            async () => { await action().ConfigureAwait(false); return true; },
+            cancellationToken);
+
+    private static void ResetMediaPositions(List<IGrouping<InputMediaType, IAlbumInputMedia>> medias)
+    {
+        foreach (var media in medias.SelectMany(group => group).OfType<InputMedia>())
+            if (media.Media is InputFileStream stream && stream.Content.CanSeek)
+                stream.Content.Position = 0;
     }
 
     private void PrepareBot()
