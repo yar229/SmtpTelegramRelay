@@ -13,7 +13,6 @@ public static class Program
         var environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production";
 
         var config = new ConfigurationBuilder()
-            .SetBasePath(Directory.GetCurrentDirectory())
             .SetBasePath(AppContext.BaseDirectory)
             .AddJsonFile("appsettings.json", optional: true)
             .AddJsonFile($"appsettings.{environment.ToLowerInvariant()}.json", optional: true)

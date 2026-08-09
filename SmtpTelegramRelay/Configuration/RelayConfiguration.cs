@@ -7,10 +7,10 @@ public sealed class RelayConfiguration
     public bool UseProxy { get; set; } = default!;
     public string Proxy { get; set; } = default!;
 
-    public string HttpIp { get; set; } = default!;
+    public string HttpAddress { get; set; } = default!;
     public ushort HttpPort { get; set; } = 80;
 
-    public string SmtpIp { get; set; } = default!;
+    public string SmtpAddress { get; set; } = default!;
     public ushort SmtpPort { get; set; } = 25;
 
     public string TelegramBotToken { get; set; } = default!;
