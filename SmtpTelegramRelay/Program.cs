@@ -8,16 +8,19 @@ public static class Program
 {
     private static void Main()
     {
+        LoadDotEnv();
+
+        var environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production";
+
         var config = new ConfigurationBuilder()
             .SetBasePath(Directory.GetCurrentDirectory())
             .SetBasePath(AppContext.BaseDirectory)
-            .AddYamlFile("appsettings.yaml", optional: true)
+            .AddJsonFile("appsettings.json", optional: true)
+            .AddJsonFile($"appsettings.{environment.ToLowerInvariant()}.json", optional: true)
             .Build();
 
-        var builder = WebHost
-            .CreateDefaultBuilder();
-
-        IWebHost webHost = builder
+        IWebHost webHost = WebHost
+            .CreateDefaultBuilder()
             .UseConfiguration(config)
             .UseNLog()
             .UseStartup<Startup>()
@@ -25,5 +28,20 @@ public static class Program
             .Build();
 
         webHost.Run();
+    }
+
+    private static void LoadDotEnv()
+    {
+        var path = new[] { Directory.GetCurrentDirectory(), AppContext.BaseDirectory }
+            .Select(p => Path.Combine(p, ".env"))
+            .FirstOrDefault(File.Exists);
+
+        if (path is null)
+            return;
+
+        DotNetEnv.Env.Load(path, new DotNetEnv.LoadOptions(
+            setEnvVars: true,
+            clobberExistingVars: false,
+            onlyExactPath: true));
     }
 }

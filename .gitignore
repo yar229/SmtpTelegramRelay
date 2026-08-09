@@ -339,4 +339,7 @@ ASALocalRun/
 # BeatPulse healthcheck temp database
 healthchecksdb
 /SmtpTelegramRelay/Properties/launchSettings.json
-/SmtpTelegramRelay/appsettings.Development.yaml
+/SmtpTelegramRelay/appsettings.Development.json
+/SmtpTelegramRelay/appsettings.develop.json
+/SmtpTelegramRelay/appsettings.production.json
+/SmtpTelegramRelay/.env
