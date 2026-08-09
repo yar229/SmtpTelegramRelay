@@ -111,13 +111,31 @@ public sealed class TelegramStore : MessageStore
             .ConfigureAwait(false);
 
             foreach (var mediaList in medias)
-                await SendWithRetryAsync(() =>
+                foreach (var chunk in mediaList.Chunk(MaxAlbumSize))
+                {
+                    if (chunk.Length == 1)
                     {
-                        ResetMediaPositions(medias);
-                        return _bot!.SendMediaGroup(chat.TelegramChatId, mediaList, disableNotification: true,
-                            cancellationToken: cancellationToken); //TODO: upload files once, then send by ids
-                    }, cancellationToken)
-                .ConfigureAwait(false);
+                        var single = (InputMedia)chunk[0];
+                        await SendWithRetryAsync(async () =>
+                            {
+                                ResetMediaPositions(medias);
+                                if (single.Type == InputMediaType.Photo)
+                                    await _bot!.SendPhoto(chat.TelegramChatId, single.Media).ConfigureAwait(false);
+                                else
+                                    await _bot!.SendDocument(chat.TelegramChatId, single.Media).ConfigureAwait(false);
+                            }, cancellationToken)
+                        .ConfigureAwait(false);
+                        continue;
+                    }
+
+                    await SendWithRetryAsync(() =>
+                        {
+                            ResetMediaPositions(medias);
+                            return _bot!.SendMediaGroup(chat.TelegramChatId, chunk, disableNotification: true,
+                                cancellationToken: cancellationToken); //TODO: upload files once, then send by ids
+                        }, cancellationToken)
+                    .ConfigureAwait(false);
+                }
         }
 
         return SmtpResponse.Ok;
@@ -195,6 +213,7 @@ public sealed class TelegramStore : MessageStore
     }
 
     private const int MaxTelegramRetries = 3;
+    private const int MaxAlbumSize = 10;
 
     private static bool IsRetryable(Exception ex) => ex switch
     {
