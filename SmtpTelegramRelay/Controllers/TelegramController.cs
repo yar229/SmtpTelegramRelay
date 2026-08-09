@@ -19,7 +19,7 @@ public class TelegramController : ControllerBase
     [HttpGet("message")]
     public async Task<IActionResult> Send([FromQuery] WebMessage webMessage)
     {
-        await _store.SaveAsync(new TelegramMessage(webMessage), default);
+        await _store.SaveAsync(new TelegramMessage(webMessage), HttpContext.RequestAborted).ConfigureAwait(false);
         return Ok();
     }
 
@@ -27,7 +27,7 @@ public class TelegramController : ControllerBase
     public async Task<IActionResult> Photos([FromQuery] WebMessage webMessage, [FromForm] IFormCollection formCollection)
     {
         var files = formCollection.Files.Select(f => (f.FileName, f.OpenReadStream()));
-        await _store.SaveAsync(new TelegramMessage(webMessage, files), default);
+        await _store.SaveAsync(new TelegramMessage(webMessage, files), HttpContext.RequestAborted).ConfigureAwait(false);
         return Ok();
     }
 }
