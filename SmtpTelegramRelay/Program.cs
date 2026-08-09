@@ -24,6 +24,7 @@ public static class Program
         IWebHost webHost = WebHost
             .CreateDefaultBuilder()
             .UseConfiguration(config)
+            .ConfigureLogging(logging => logging.ClearProviders())
             .UseNLog()
             .UseStartup<Startup>()
             .UseUrls($"http://{config.GetValue<string>("HttpAddress")}:{config.GetValue<int>("HttpPort")}/")
