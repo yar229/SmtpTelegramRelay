@@ -168,6 +168,14 @@ public sealed class TelegramStore : MessageStore
             .ConfigureAwait(false);
     }
 
+    public async Task TestTelegramAsync(CancellationToken cancellationToken)
+    {
+        if (_bot is null)
+            throw new InvalidOperationException("Telegram bot is not initialized");
+
+        await _bot.GetMe(cancellationToken).ConfigureAwait(false);
+    }
+
     private void PrepareBot(CancellationToken cancellationToken)
     {
         if (_options.CurrentValue.UseProxy)

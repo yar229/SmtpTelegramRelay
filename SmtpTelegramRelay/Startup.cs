@@ -5,6 +5,7 @@ using SmtpTelegramRelay.Configuration;
 using SmtpTelegramRelay.Services;
 using SmtpTelegramRelay.Services.TelegramStores;
 using System.Runtime.InteropServices;
+using System.Text.Json.Serialization;
 
 namespace SmtpTelegramRelay;
 
@@ -21,13 +22,18 @@ public class Startup
     {
         services
             .Configure<RelayConfiguration>(Configuration)
-            .AddControllers();
+            .AddControllers()
+            .AddJsonOptions(o => o.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
         services
             .AddSwaggerGen(c =>
             {
                 c.SwaggerDoc("v1", new OpenApiInfo { Title = "SmtpTelegramRelay", Version = "v1" });
             });
+
+        services
+            .AddHealthChecks()
+            .AddCheck<TelegramHealthCheck>("telegram");
 
         services
             .AddSingleton<TelegramStore>()
