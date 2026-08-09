@@ -35,7 +35,7 @@ public sealed class TelegramStore : MessageStore
         _routes = options.CurrentValue.Routing.GroupBy(r => (r.EmailFrom, r.EmailTo))
             .ToDictionary(r => r.Key, r => r.AsEnumerable());
         _regexes = CompileRegexes(options);
-        PrepareBot(default);
+        PrepareBot();
     }
 
     public async Task<SmtpResponse> SaveAsync(TelegramMessage message, CancellationToken cancellationToken)
@@ -176,7 +176,7 @@ public sealed class TelegramStore : MessageStore
         await _bot.GetMe(cancellationToken).ConfigureAwait(false);
     }
 
-    private void PrepareBot(CancellationToken cancellationToken)
+    private void PrepareBot()
     {
         if (_options.CurrentValue.UseProxy)
         {
@@ -189,35 +189,53 @@ public sealed class TelegramStore : MessageStore
 
         _bot.OnMessage += async (message, _) =>
         {
-            if (message.Text is null || !message.Text.StartsWith('/'))
-                return;
-            if (message.Text == "/chatid")
-                await _bot.SendMessage(message.Chat, $"{message.Chat.Id}", cancellationToken: cancellationToken).ConfigureAwait(false);
-
-            foreach (var action in _routes.Values
-                         .SelectMany(r => r)
-                         .Where(r => r.TelegramChatId == message.Chat.Id)
-                         .SelectMany(r => r.Actions.Where(a => $"/{a.Name}" == message.Text.Trim())))
+            try
             {
-                ProcessStartInfo startInfo = new ProcessStartInfo
-                {
-                    FileName = @"powershell.exe",
-                    Arguments = $" {action.Command} {message.Chat.Id}",
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    UseShellExecute = false,
-                    CreateNoWindow = true
-                };
-                Process process = new Process
-                {
-                    StartInfo = startInfo
-                };
-                process.Start();
+                if (message.Text is null || !message.Text.StartsWith('/'))
+                    return;
+                if (message.Text == "/chatid")
+                    await _bot.SendMessage(message.Chat, $"{message.Chat.Id}").ConfigureAwait(false);
 
-                string output = await process.StandardOutput.ReadToEndAsync().ConfigureAwait(false);
-                string errors = await process.StandardError.ReadToEndAsync().ConfigureAwait(false);
+                foreach (var action in _routes.Values
+                             .SelectMany(r => r)
+                             .Where(r => r.TelegramChatId == message.Chat.Id)
+                             .SelectMany(r => r.Actions.Where(a => $"/{a.Name}" == message.Text.Trim())))
+                {
+                    await RunActionAsync(action, message.Chat.Id).ConfigureAwait(false);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to handle bot command '{Command}'", message.Text);
             }
         };
+    }
+
+    private async Task RunActionAsync(ActionItem action, long chatId)
+    {
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = @"powershell.exe",
+            Arguments = $" {action.Command} {chatId}",
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        using var process = new Process { StartInfo = startInfo };
+        process.Start();
+
+        var outputTask = process.StandardOutput.ReadToEndAsync();
+        var errorTask = process.StandardError.ReadToEndAsync();
+        await Task.WhenAll(outputTask, errorTask).ConfigureAwait(false);
+
+        var output = await outputTask.ConfigureAwait(false);
+        var errors = await errorTask.ConfigureAwait(false);
+
+        _logger.LogDebug("Action '{Command}' completed. Output: '{Output}'", action.Command, output);
+        if (!string.IsNullOrEmpty(errors))
+            _logger.LogWarning("Action '{Command}' wrote to stderr: '{Errors}'", action.Command, errors);
     }
 
     private List<RouteItem> GetChats(IEnumerable<string?> emailsFrom, IEnumerable<string?> emailsTo, long? chatId)
