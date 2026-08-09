@@ -17,7 +17,7 @@ public sealed class SmtpServerBuilder
         _logger = logger;
 
         var serverOptions = new SmtpServerOptionsBuilder()
-            .ServerName(options.CurrentValue.SmtpIp)
+            .ServerName(options.CurrentValue.SmtpAddress)
             .Port(options.CurrentValue.SmtpPort)
             .Build();
 

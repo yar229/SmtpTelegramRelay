@@ -140,9 +140,16 @@ internal static class HtmlToTelegamHtmlMarkdown
                 if (HtmlNode.IsOverlappedClosingElement(html))
                     break;
                 if (html.Trim().Length > 0)
-                    outText.Write(HtmlEntity.DeEntitize(html
-                        .Replace(Cr, "", StringComparison.OrdinalIgnoreCase)
-                        .Replace(Lf, "", StringComparison.OrdinalIgnoreCase)));
+                {
+                    var text = node.Ancestors("pre").Any()
+                        ? html
+                            .Replace(CrLf, Lf, StringComparison.OrdinalIgnoreCase)
+                            .Replace(Cr, Lf, StringComparison.OrdinalIgnoreCase)
+                        : html
+                            .Replace(Cr, "", StringComparison.OrdinalIgnoreCase)
+                            .Replace(Lf, "", StringComparison.OrdinalIgnoreCase);
+                    outText.Write(HtmlEntity.DeEntitize(text));
+                }
                 break;
 
             case HtmlNodeType.Element:
